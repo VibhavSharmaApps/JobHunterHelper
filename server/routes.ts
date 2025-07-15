@@ -2,15 +2,30 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertUserPreferencesSchema, insertJobUrlSchema, insertApplicationSchema } from "@shared/schema";
+import { getServerSession } from "./lib/auth";
+import { r2Storage } from "./lib/storage";
 import { z } from "zod";
+import multer from 'multer';
+
+// Configure multer for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  const DEFAULT_USER_ID = 1; // For demo purposes, using a fixed user ID
+  // Helper function to get user ID from session or use demo user
+  const getUserId = async (req: any): Promise<string> => {
+    try {
+      const session = await getServerSession();
+      return session?.user?.id || 'demo-user-123'; // Fallback to demo user
+    } catch {
+      return 'demo-user-123'; // Fallback to demo user if auth fails
+    }
+  };
   
   // User preferences routes
   app.get("/api/user-preferences", async (req, res) => {
     try {
-      const preferences = await storage.getUserPreferences(DEFAULT_USER_ID);
+      const userId = await getUserId(req);
+      const preferences = await storage.getUserPreferences(userId);
       res.json(preferences || {
         qualifications: "",
         workExperience: "",
@@ -23,9 +38,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/user-preferences", async (req, res) => {
     try {
+      const userId = await getUserId(req);
       const validatedData = insertUserPreferencesSchema.parse({
         ...req.body,
-        userId: DEFAULT_USER_ID
+        userId: userId
       });
       const preferences = await storage.createOrUpdateUserPreferences(validatedData);
       res.json(preferences);
@@ -38,10 +54,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Resume upload route
+  app.post("/api/upload-resume", upload.single('resume'), async (req, res) => {
+    try {
+      const userId = await getUserId(req);
+      const file = req.file;
+      
+      if (!file) {
+        res.status(400).json({ message: "No file uploaded" });
+        return;
+      }
+
+      // Generate unique key and upload to R2
+      const key = r2Storage.generateResumeKey(userId, file.originalname);
+      const url = await r2Storage.uploadFile(file.buffer, key, file.mimetype);
+      
+      res.json({ url, key });
+    } catch (error) {
+      console.error("Error uploading resume:", error);
+      res.status(500).json({ message: "Failed to upload resume" });
+    }
+  });
+
   // Job URLs routes
   app.get("/api/job-urls", async (req, res) => {
     try {
-      const urls = await storage.getJobUrls(DEFAULT_USER_ID);
+      const userId = await getUserId(req);
+      const urls = await storage.getJobUrls(userId);
       res.json(urls);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch job URLs" });
@@ -50,9 +89,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/job-urls", async (req, res) => {
     try {
+      const userId = await getUserId(req);
       const validatedData = insertJobUrlSchema.parse({
         ...req.body,
-        userId: DEFAULT_USER_ID
+        userId: userId
       });
       const jobUrl = await storage.createJobUrl(validatedData);
       res.json(jobUrl);
@@ -103,7 +143,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Applications routes
   app.get("/api/applications", async (req, res) => {
     try {
-      const applications = await storage.getApplications(DEFAULT_USER_ID);
+      const userId = await getUserId(req);
+      const applications = await storage.getApplications(userId);
       res.json(applications);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch applications" });
@@ -112,9 +153,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/applications", async (req, res) => {
     try {
+      const userId = await getUserId(req);
       const validatedData = insertApplicationSchema.parse({
         ...req.body,
-        userId: DEFAULT_USER_ID
+        userId: userId
       });
       const application = await storage.createApplication(validatedData);
       res.json(application);
@@ -161,7 +203,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stats route
   app.get("/api/stats", async (req, res) => {
     try {
-      const stats = await storage.getStats(DEFAULT_USER_ID);
+      const userId = await getUserId(req);
+      const stats = await storage.getStats(userId);
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch stats" });

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a full-stack job application tracking system built with React and Express.js. The application helps users manage their job search process by tracking job URLs, applications, and personal preferences. It features a modern UI built with shadcn/ui components and Tailwind CSS, with a PostgreSQL database managed through Drizzle ORM.
+This is a full-stack job application tracking system built with React and Express.js. The application helps users manage their job search process by tracking job URLs, applications, and personal preferences. It features a modern UI built with shadcn/ui components and Tailwind CSS, with Supabase for database storage, Cloudflare for file storage, and NextAuth for authentication.
 
 ## System Architecture
 
